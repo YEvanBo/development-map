@@ -1,10 +1,10 @@
 # Development Map · 开发地图
 
-换一个会话，Agent 也能从最近的检查点接着做。新会话可以查到上次交付了什么、证据在哪里，以及下一步要做什么。如果两个任务从同一个检查点开始，其中一个先提交，地图会拒绝另一个基于旧检查点的提交。在等待或退出前，Agent 按 Skill 保存交接说明和改动文件的私有快照；重启后就能找回未交付的工作，对照先提交的结果，合并后继续交付。
+换个会话，不用再从头跟 Agent 讲一遍项目。它可以翻开开发地图，看上次做到哪儿、改了什么、接下来该做什么。两个任务碰巧改到同一个节点时，先提交的结果会保留下来。另一个 Agent 在退出前存好快照，下次就能找回手头还没交付的改动，对照前一个结果接着做。
 
-An agent can pick up where a previous session left off. The latest checkpoint shows what was delivered, where to find the evidence, and what to do next. If two tasks start from the same checkpoint, the first can submit and the second receives a conflict. Before waiting or exiting, the agent uses the Skill to save a private snapshot of its handoff notes and changed files. After restarting, it can recover its pending work, compare it with the first submission, and merge the two results.
+Starting a new chat? Your agent can check the map to see where it left off, what changed, and what to do next. If two tasks update the same node, the first submission stays in place. The other agent can save its unfinished changes in a snapshot before it exits, then pick them up next session and merge them with the first result.
 
-**接入 / Integrations** — Codex 和 DeepSeek Harness（DSH）均可通过随附的 MCP 服务与 Skill 使用开发地图。Both Codex and DeepSeek Harness (DSH) can use the bundled MCP server and Skill.
+支持 Codex 和 DeepSeek Harness（DSH），通过 MCP 和 Skill 接入。The included MCP server and Skill work with both Codex and DSH.
 
 **作者 / Author** — EvanBo
 
@@ -27,6 +27,10 @@ cargo run --example solo -- /tmp/development-map-solo-new
 
 ## CLI installation
 
+请 Agent 帮你安装或配置时，Codex 建议选 GPT-5.6 Sol 或 GPT-6 Astra，DSH 建议选 DeepSeek V4 Flash，思考强度设为高（High）。自己按下面的命令安装也可以。
+
+For help with setup, we suggest GPT-5.6 Sol or GPT-6 Astra in Codex, or DeepSeek V4 Flash in DSH, with reasoning set to High. You can also run the commands yourself.
+
 ```sh
 cargo install --locked --path . --bins
 map-mcp --version
@@ -34,7 +38,11 @@ map-mcp --version
 
 Install the portable Skill and use MCP or direct CLI in DSH, Codex, or Gemini Antigravity: [platform guide](docs/PLATFORMS.md), [CLI quick start](docs/CLI.md), [commercial use and attribution](docs/COMMERCIAL.md).
 
-## Local access
+## 本机网页 / Local web view
+
+想看看 Agent 做到了哪一步？运行下面的 `serve` 命令，打开终端打印的本机链接，就能在只读网页里搜索节点、看架构树和提交记录。Agent 通过 MCP 或 CLI 写回进度。
+
+Run `serve` and open the local link printed in the terminal to search nodes, browse the architecture tree, and read checkpoints. The web view is read-only. Agents write updates through MCP or the CLI.
 
 ```sh
 cargo run --bin development-map -- --version
