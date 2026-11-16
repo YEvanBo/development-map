@@ -38,11 +38,7 @@ map-mcp --version
 
 Install the portable Skill and use MCP or direct CLI in DSH, Codex, or Gemini Antigravity: [platform guide](docs/PLATFORMS.md), [CLI quick start](docs/CLI.md), [commercial use and attribution](docs/COMMERCIAL.md).
 
-## 本机网页 / Local web view
-
-想看看 Agent 做到了哪一步？运行下面的 `serve` 命令，打开终端打印的本机链接，就能在只读网页里搜索节点、看架构树和提交记录。Agent 通过 MCP 或 CLI 写回进度。
-
-Run `serve` and open the local link printed in the terminal to search nodes, browse the architecture tree, and read checkpoints. The web view is read-only. Agents write updates through MCP or the CLI.
+## 本机 HTTP API / Local HTTP API
 
 ```sh
 cargo run --bin development-map -- --version
@@ -51,7 +47,7 @@ cargo run --bin development-map -- serve /absolute/path/new-map.sqlite
 cargo run --bin development-map -- serve-scoped /absolute/path/new-map.sqlite
 ```
 
-Both server modes bind only `127.0.0.1` on a dynamic port. `serve` prints a one-use launch URL for the built-in read-only browser view. `serve-scoped` prints the base URL and requires provisioned bearer identities for APIs. It does not enable browser cookie login.
+Both commands start an API server on a dynamic loopback port. `serve-scoped` prints the base URL and accepts provisioned bearer identities. `serve` prints JSON with the base URL and a one-use code. POST the code as `{"code":"…"}` to `/map/session` for a read-only API session.
 
 Trusted local operators initialize projects, architecture and identities. Agents read and submit through `map-agent` or scoped HTTP. See [protocol](docs/PROTOCOL.md), [security](docs/SECURITY.md), [scope](docs/SCOPE.md), and [provenance](docs/PROVENANCE.md).
 
