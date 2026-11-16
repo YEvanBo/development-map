@@ -1,0 +1,7 @@
+cff-version: 1.2.0
+message: "Please cite Development Map by EvanBo."
+title: "Development Map"
+version: "0.1.0"
+authors:
+  - name: "EvanBo"
+type: software
