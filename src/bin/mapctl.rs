@@ -13,10 +13,22 @@ use std::{
     io::{self, Read},
     path::Path,
 };
+fn operator_request<T: serde::de::DeserializeOwned>() -> Result<T, String> {
+    let mut bytes = Vec::new();
+    io::stdin()
+        .lock()
+        .take(65537)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > 65536 {
+        return Err("operator request exceeds 64 KiB".into());
+    }
+    serde_json::from_slice(&bytes).map_err(|_| "invalid operator request JSON".into())
+}
 fn run() -> Result<serde_json::Value, String> {
     let a = env::args().collect::<Vec<_>>();
     if a.len() < 3 {
-        return Err("usage: mapctl <project|architecture-node|architecture-edge|dependency|trace|migrate|rebuild|backup|restore|import-speaker|import-harness|adopt|node|handoff|bind|revoke|register-repo|link-repo|submit-resources|resources|scan-git> <db> [arguments]".into());
+        return Err("usage: mapctl <project|architecture-node|architecture-edge|dependency|trace|grant-reference|revoke-reference|repair-host|lookup-host|intake|assess-risk|record-risk|record-reminder|revoke-goal|confirm-goal|migrate|rebuild|backup|restore|import-speaker|import-harness|adopt|node|handoff|bind|revoke|register-repo|link-repo|submit-resources|resources|scan-git> <db> [arguments]".into());
     }
     let s = MapStore::new(&a[2]);
     let arg = |i| {
@@ -95,14 +107,10 @@ fn run() -> Result<serde_json::Value, String> {
                 .map_err(|e| format!("{e:?}"));
         }
         "submit-resources" => {
-            let mut input = String::new();
-            io::stdin()
-                .read_to_string(&mut input)
-                .map_err(|e| e.to_string())?;
-            let bundle: development_map::submission::Submission =
-                serde_json::from_str(&input).map_err(|e| e.to_string())?;
+            let token = env::var("MAP_AGENT_TOKEN").map_err(|_| "manager credential required")?;
+            let bundle = operator_request()?;
             return s
-                .submit(&bundle)
+                .submit_as_manager(&bundle, &token)
                 .and_then(|r| {
                     serde_json::to_value(r)
                         .map_err(|_| development_map::store::Error::Invalid("receipt"))
@@ -116,6 +124,48 @@ fn run() -> Result<serde_json::Value, String> {
                 .map(|count| json!({"observations":count}))
                 .map_err(|e| format!("{e:?}"))
         }
+        "grant-reference" => {
+            return s
+                .grant_reference(&operator_request()?)
+                .map(|id| json!({"reference_id":id}))
+                .map_err(|e| format!("{e:?}"))
+        }
+        "revoke-reference" => s.revoke_reference(&operator_request()?),
+        "assess-risk" => {
+            return s
+                .assess_risk(&operator_request()?)
+                .map_err(|e| format!("{e:?}"))
+        }
+        "record-risk" => s.record_risk(&operator_request()?),
+        "record-reminder" => s.record_reminder(&operator_request()?),
+        "repair-host" => s.repair_host(&operator_request()?),
+        "lookup-host" => {
+            let key = operator_request()?;
+            return s
+                .host_target(&key)
+                .map(|candidate| match candidate {
+                    Some((project, node, revision)) => {
+                        json!({"candidate":{"project_id":project,"node_id":node,"revision":revision}})
+                    }
+                    None => json!({"candidate":null}),
+                })
+                .map_err(|e| format!("{e:?}"));
+        }
+        "intake" => {
+            let request = operator_request()?;
+            return s
+                .intake(&request)
+                .map(|id| json!({"confirmation_event":id}))
+                .map_err(|e| format!("{e:?}"));
+        }
+        "revoke-goal" => s.revoke_goal(&operator_request()?),
+        "confirm-goal" => {
+            let record = operator_request()?;
+            return s
+                .confirm_goal(&record)
+                .map(|id| json!({"event_id":id}))
+                .map_err(|e| format!("{e:?}"));
+        }
         "bind" => {
             let mut text = String::new();
             io::stdin()
@@ -125,7 +175,16 @@ fn run() -> Result<serde_json::Value, String> {
                 serde_json::from_str(&text).map_err(|e| e.to_string())?;
             let b: Binding =
                 serde_json::from_value(input["binding"].clone()).map_err(|e| e.to_string())?;
-            s.bind_identity(input["token"].as_str().ok_or("token required")?, &b)
+            let scope = input
+                .get("host_scope")
+                .map(|v| serde_json::from_value(v.clone()))
+                .transpose()
+                .map_err(|_| "invalid host scope")?;
+            s.bind_scoped(
+                input["token"].as_str().ok_or("token required")?,
+                &b,
+                scope.as_ref(),
+            )
         }
         "revoke" => {
             let mut token = String::new();
