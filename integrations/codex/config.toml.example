@@ -1,0 +1,6 @@
+# Original author: EvanBo. Apache-2.0. Merge this table into the chosen config.
+[mcp_servers.evanbo_development_map]
+command = "/absolute/path/map-mcp"
+args = ["/absolute/path/map.sqlite", "--token-file", "/absolute/path/private-agent-token.txt"]
+startup_timeout_sec = 20
+tool_timeout_sec = 30

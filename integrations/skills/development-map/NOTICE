@@ -1,0 +1,16 @@
+Development Map
+Copyright 2026 EvanBo
+Original author: EvanBo
+
+This distribution includes the Rust Development Map, its local CLI/MCP adapter,
+portable Agent Skill, documentation, examples, and browser assets authored or
+adapted for this project. Keep applicable original attribution when redistributing.
+Modifications in this review include access-scope fixes, cross-project dependency
+filtering, deletion-impact tracking, strict input validation, independent operator
+commands, CLI/MCP onboarding, tests, and release provenance.
+
+Third-party dependencies retain their own authors and licenses. DSH, Codex,
+Google/Gemini/Antigravity are independent products; this is not an endorsement
+or official product of those organizations. No scheduler, communications bridge,
+commercial Harness implementation, model credentials, or private project data
+is included or licensed by this distribution.

@@ -1,0 +1,12 @@
+/target/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+.env
+.env.*
+*.pem
+*.key
+agent-token.txt
+.DS_Store
+.devmap-pending/

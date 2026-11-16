@@ -1,0 +1,9 @@
+# CLI overlay for the DSH headless profile: dsh headless --patch /absolute/path/to/overlay.yml
+- insert:
+    - id: evanbo-development-map
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: evanbo_development_map
+        transport: stdio
+        command: /absolute/path/map-mcp
+        args: [/absolute/path/map.sqlite, --token-file, /absolute/path/private-agent-token.txt]

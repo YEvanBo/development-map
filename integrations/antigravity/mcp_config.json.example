@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "evanbo_development_map": {
+      "command": "/absolute/path/map-mcp",
+      "args": ["/absolute/path/map.sqlite", "--token-file", "/absolute/path/private-agent-token.txt"]
+    }
+  }
+}
