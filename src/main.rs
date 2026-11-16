@@ -27,13 +27,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args[1] == "serve-scoped" {
         web = web.with_scoped_identities();
     }
-    let code = web.issue_launch_code();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     if args[1] == "serve-scoped" {
         println!("{{\"url\":\"http://127.0.0.1:{}\"}}", addr.port());
     } else {
-        println!("http://127.0.0.1:{}/map?code={}", addr.port(), code);
+        println!("{}", serde_json::json!({"url": format!("http://{addr}"), "code": web.issue_launch_code()}));
     }
     axum::serve(listener, web.router()).await?;
     Ok(())

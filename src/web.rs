@@ -1,7 +1,6 @@
 // Copyright (c) 2026 EvanBo. Provenance: EvanBo::DevelopmentMap::V1::046616abf607b642
 use crate::store::{self, MapStore};
 use axum::{
-    body::Body,
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
@@ -104,9 +103,6 @@ impl MapWeb {
     pub fn router(self) -> Router {
         let guard_state = self.clone();
         Router::new()
-            .route("/map", get(ui))
-            .route("/map/app.js", get(js))
-            .route("/map/app.css", get(css))
             .route("/map/session", post(session))
             .route("/v1/map/projects", get(projects))
             .route("/v1/map/nodes/{id}/local-files", get(local_files))
@@ -472,31 +468,6 @@ async fn session(State(w): State<MapWeb>, h: HeaderMap, Json(input): Json<Launch
     );
     r
 }
-fn static_response(body: &'static str, kind: &'static str) -> Response {
-    let mut r = Response::new(Body::from(body));
-    r.headers_mut()
-        .insert(header::CONTENT_TYPE, HeaderValue::from_static(kind));
-    r.headers_mut().insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"));
-    r.headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    r
-}
-async fn ui() -> Response {
-    static_response(
-        include_str!("../static/index.html"),
-        "text/html; charset=utf-8",
-    )
-}
-async fn js() -> Response {
-    static_response(
-        include_str!("../static/app.js"),
-        "text/javascript; charset=utf-8",
-    )
-}
-async fn css() -> Response {
-    static_response(include_str!("../static/app.css"), "text/css; charset=utf-8")
-}
-
 async fn architecture(
     State(w): State<MapWeb>,
     h: HeaderMap,
