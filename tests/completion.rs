@@ -1,3 +1,5 @@
+#[path = "support/rc2.rs"]
+mod rc2;
 mod support;
 use development_map::{
     identity::{authorize, Binding},
@@ -191,6 +193,7 @@ fn binding_revocation_expiry_and_handoff() {
         expires_at: 4102444800,
     };
     s.bind_identity(token, &b).unwrap();
+    rc2::migrate_fixture(&s);
     assert!(s
         .read(|tx| authorize(tx, token, "other", Some("m"), "worker"))
         .is_err());

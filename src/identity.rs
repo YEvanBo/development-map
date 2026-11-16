@@ -19,8 +19,52 @@ pub struct Binding {
 pub fn token_hash(token: &str) -> String {
     format!("{:x}", Sha256::digest(token.as_bytes()))
 }
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostScope {
+    pub provider: String,
+    pub workspace: String,
+}
+
+pub(crate) const HOST_CONFLICT: &str = "host task already associated; operator review required";
+pub(crate) fn audit_conflict(
+    tx: &Transaction,
+    b: &Binding,
+    scope: Option<&HostScope>,
+) -> Result<()> {
+    let detail = serde_json::json!({"host_scope":scope,"task_id":b.task_id,"attempted_node":b.node_id,"source_ref":b.source_ref});
+    crate::store::event(
+        tx,
+        &b.project_id,
+        None,
+        "host_binding_conflict",
+        &detail.to_string(),
+    )
+}
+
 impl MapStore {
     pub fn bind_identity(&self, token: &str, b: &Binding) -> Result<()> {
+        self.bind_scoped(token, b, None)
+    }
+    pub fn bind_scoped(&self, token: &str, b: &Binding, scope: Option<&HostScope>) -> Result<()> {
+        let mut db = self.connect(false)?;
+        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let result = Self::bind_tx(&tx, token, b, scope);
+        if let Err(Error::Conflict(HOST_CONFLICT)) = result {
+            audit_conflict(&tx, b, scope)?;
+            tx.commit()?;
+            return result;
+        }
+        result?;
+        tx.commit()?;
+        Ok(())
+    }
+    pub(crate) fn bind_tx(
+        tx: &Transaction,
+        token: &str,
+        b: &Binding,
+        scope: Option<&HostScope>,
+    ) -> Result<()> {
         if token.len() < 24
             || b.subject.is_empty()
             || b.task_id.is_empty()
@@ -36,8 +80,6 @@ impl MapStore {
         if b.role != "worker" && (b.node_id.is_some() || b.generation.is_some()) {
             return Err(Error::Invalid("node scope belongs to worker identity"));
         }
-        let mut db = self.connect(false)?;
-        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let project: bool = tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM map_projects WHERE id=?)",
             [&b.project_id],
@@ -54,7 +96,7 @@ impl MapStore {
                 ));
             }
         }
-        check_host_task(&tx, b)?;
+        check_host_task(tx, b)?;
         // A token cannot silently acquire a different identity. Revoke and provision a new token.
         let encoded = serde_json::to_string(b).map_err(|_| Error::Invalid("binding"))?;
         let old: Option<String> = tx
@@ -67,11 +109,43 @@ impl MapStore {
         if old.as_ref().is_some_and(|v| v != &encoded) {
             return Err(Error::Conflict("token already bound"));
         }
+        if let Some(scope) = scope {
+            crate::store::require_current_schema(tx)?;
+            if tx.query_row("SELECT ?<=unixepoch() OR EXISTS(SELECT 1 FROM map_identities WHERE token_hash=? AND revoked<>0)",
+                params![b.expires_at,token_hash(token)],|r|r.get::<_,bool>(0))? {
+                return Err(Error::Invalid("inactive credential"));
+            }
+            let node = b
+                .node_id
+                .as_deref()
+                .ok_or(Error::Invalid("worker binding required"))?;
+            if scope.provider.trim().is_empty()
+                || scope.workspace.trim().is_empty()
+                || b.task_id.trim().is_empty()
+            {
+                return Err(Error::Invalid("stable host scope and task required"));
+            }
+            let key = params![
+                scope.provider,
+                scope.workspace,
+                b.task_id,
+                b.project_id,
+                node
+            ];
+            let created = tx.execute("INSERT INTO map_host_routes(provider,workspace,task_id,project_id,node_id) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(provider,workspace,task_id) DO NOTHING", key)?;
+            let detail =
+                serde_json::json!({"scope":scope,"task_id":b.task_id,"source_ref":b.source_ref})
+                    .to_string();
+            if created == 1 {
+                crate::store::event(tx,&b.project_id,Some(node),"host_bound",&detail)?;
+            } else if !tx.query_row("SELECT EXISTS(SELECT 1 FROM map_host_routes WHERE provider=?1 AND workspace=?2 AND task_id=?3 AND project_id=?4 AND node_id=?5)",key,|r|r.get::<_,bool>(0))? {
+                return Err(Error::Conflict(HOST_CONFLICT));
+            }
+        }
         tx.execute(
             "INSERT OR IGNORE INTO map_identities(token_hash,binding,revoked) VALUES(?,?,0)",
             params![token_hash(token), encoded],
         )?;
-        tx.commit()?;
         Ok(())
     }
     pub fn revoke_identity(&self, token: &str) -> Result<()> {
@@ -82,6 +156,21 @@ impl MapStore {
         Ok(())
     }
 }
+pub(crate) fn load_binding(tx: &Transaction, token: &str) -> Result<Binding> {
+    let row: Option<(String, bool)> = tx
+        .query_row(
+            "SELECT binding,revoked FROM map_identities WHERE token_hash=?",
+            [token_hash(token)],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    let (encoded, revoked) = row.ok_or(Error::Invalid("identity missing"))?;
+    if revoked {
+        return Err(Error::Invalid("identity revoked"));
+    }
+    serde_json::from_str(&encoded).map_err(|_| Error::Invalid("identity data"))
+}
+
 pub fn authorize(
     tx: &Transaction<'_>,
     token: &str,
@@ -89,19 +178,13 @@ pub fn authorize(
     node: Option<&str>,
     role: &str,
 ) -> Result<Binding> {
-    let encoded: Option<String> = tx
-        .query_row(
-            "SELECT binding FROM map_identities WHERE token_hash=? AND revoked=0",
-            [token_hash(token)],
-            |r| r.get(0),
-        )
-        .optional()?;
-    let b: Binding =
-        serde_json::from_str(&encoded.ok_or(Error::Invalid("identity missing or revoked"))?)
-            .map_err(|_| Error::Invalid("identity data"))?;
+    let b = load_binding(tx, token)?;
     let now: i64 = tx.query_row("SELECT unixepoch()", [], |r| r.get(0))?;
-    if b.project_id != project || b.expires_at <= now || !(role == "reader" || b.role == role) {
-        return Err(Error::Invalid("identity scope or expiry"));
+    if b.expires_at <= now {
+        return Err(Error::Invalid("identity expired"));
+    }
+    if b.project_id != project || !(role == "reader" || b.role == role) {
+        return Err(Error::Invalid("identity scope"));
     }
     if b.role == "worker" {
         if node != b.node_id.as_deref() {
@@ -158,4 +241,93 @@ fn check_host_task(tx: &Transaction<'_>, b: &Binding) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Operator-only lookup. A route is a candidate until the worker credential passes resume.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostTask {
+    project_hint: Option<String>,
+    pub provider: String,
+    pub workspace: String,
+    pub task_id: String,
+}
+impl MapStore {
+    pub fn host_target(&self, key: &HostTask) -> Result<Option<(String, String, i64)>> {
+        if [&key.provider, &key.workspace, &key.task_id]
+            .iter()
+            .any(|v| v.trim().is_empty())
+        {
+            return Err(Error::Invalid("stable host scope and task required"));
+        }
+        self.read(|tx| {
+            let candidate: Option<(String,String,i64)>=tx.query_row(
+                "SELECT project_id,node_id,revision FROM map_host_routes WHERE provider=? AND workspace=? AND task_id=?",
+                params![key.provider,key.workspace,key.task_id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
+            if let (Some(hint),Some((project,_,_)))=(&key.project_hint,&candidate) {
+                if hint!=project {return Err(Error::Conflict("project hint conflicts with the assigned route; ask the user"));}
+            }
+            Ok(candidate)
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouteRepair {
+    key: HostTask,
+    expected_revision: i64,
+    old_project: String,
+    old_node: String,
+    project: String,
+    node: String,
+    decision_ref: String,
+}
+
+impl MapStore {
+    pub fn repair_host(&self, r: &RouteRepair) -> Result<()> {
+        if r.key.project_hint.is_some() {
+            return Err(Error::Invalid(
+                "repair requires explicit old and new projects",
+            ));
+        }
+        if r.decision_ref.trim().is_empty()
+            || r.decision_ref.len() > 512
+            || (r.old_project == r.project && r.old_node == r.node)
+        {
+            return Err(Error::Invalid(
+                "explicit route correction and decision reference required",
+            ));
+        }
+        let mut db = self.connect(false)?;
+        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        crate::store::require_current_schema(&tx)?;
+        let active:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM map_identities WHERE revoked=0
+            AND json_extract(binding,'$.expires_at')>unixepoch() AND json_extract(binding,'$.task_id')=?
+            AND json_extract(binding,'$.project_id')=? AND json_extract(binding,'$.node_id')=?)",
+            params![r.key.task_id,r.old_project,r.old_node],|row|row.get(0))?;
+        if active {
+            return Err(Error::Conflict(
+                "revoke old assignment credentials before repair",
+            ));
+        }
+        let changed=tx.execute("UPDATE map_host_routes SET project_id=?1,node_id=?2,revision=revision+1
+            WHERE provider=?3 AND workspace=?4 AND task_id=?5 AND revision=?6 AND project_id=?7 AND node_id=?8
+            AND EXISTS(SELECT 1 FROM map_dev_nodes WHERE project_id=?1 AND id=?2)",
+            params![r.project,r.node,r.key.provider,r.key.workspace,r.key.task_id,r.expected_revision,r.old_project,r.old_node])?;
+        if changed != 1 {
+            return Err(Error::Conflict(
+                "route or target changed; inspect before repair",
+            ));
+        }
+        // Each project's history mentions only its side of the correction.
+        for (project, node, kind) in [
+            (&r.old_project, &r.old_node, "host_detached"),
+            (&r.project, &r.node, "host_relinked"),
+        ] {
+            crate::store::event(&tx, project, Some(node), kind, &r.decision_ref)?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
 }

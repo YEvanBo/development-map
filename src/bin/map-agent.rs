@@ -28,14 +28,14 @@ fn run() -> Result<serde_json::Value, String> {
         let request: Resume = serde_json::from_str(&data).map_err(|_| "invalid resume JSON")?;
         store
             .agent_resume(&token, &request)
-            .map_err(|e| format!("{e:?}"))?
+            .map_err(|e| development_map::agent::client_error(&e))?
     } else {
         let input: Submission =
             serde_json::from_str(&data).map_err(|_| "invalid submission JSON")?;
         serde_json::to_value(
             store
                 .submit_bound(&input, Some(&token))
-                .map_err(|e| format!("{e:?}"))?,
+                .map_err(|e| development_map::agent::client_error(&e))?,
         )
         .map_err(|_| "receipt encoding")?
     };

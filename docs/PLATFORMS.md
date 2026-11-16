@@ -7,6 +7,14 @@ Build/install the Rust binaries with `cargo install --locked --path . --bins`. U
 
 Run `sh integrations/install-skill.sh /absolute/project-root` to copy the portable `development-map` Skill into `.agents/skills/`. It refuses an existing destination. It changes only the specified project and does not register a server or overwrite platform configuration. The copied Skill is self-contained with CLI reference and LICENSE/NOTICE. If the project is inside a larger Git repository, use the root the chosen platform actually discovers.
 
+## Start a mapped task
+
+Installing the Skill or starting the stdio server makes tools available. Neither guarantees a model will call them on a new chat. For repeatable entry, include this line in the project's existing Codex instructions (AGENTS.md), or pass it with the actual assignment in the first Codex or DSH prompt:
+
+> Use the development-map Skill for this assignment. Read the configured map with your bound identity before editing. Use the node’s takeover state to ask for a missing goal confirmation, resume confirmed work, or stop on current acceptance.
+
+Supply the real assignment and provisioned project ID alongside that instruction. In the first session, check the tool trace for a successful resume (project read for a reader), or the specific missing provisioning. For a new project without a map, the operator creates the project, adopts the initial architecture and provisions the assignment as needed. Import an existing source only when the operator intends to use it. A worker reports a missing binding instead of reusing another task's node. Once the requested result and directly affected checks pass, write the authorized checkpoint and deliver.
+
 ## Codex
 
 The current [official MCP guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) describes config.toml stdio servers. Merge `integrations/codex/config.toml.example` into the selected `~/.codex/config.toml` or trusted project's `.codex/config.toml`, replacing all three absolute paths. Do not overwrite existing tables. Alternatively register the same executable and arguments with `codex mcp add evanbo_development_map -- /absolute/path/map-mcp /absolute/path/map.sqlite --token-file /absolute/path/private-agent-token.txt`. Inspect with `codex mcp get evanbo_development_map`.

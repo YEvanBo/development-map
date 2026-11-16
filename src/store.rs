@@ -145,6 +145,32 @@ impl MapStore {
         adoption_ref: &str,
         token: Option<&str>,
     ) -> Result<()> {
+        let mut db = self.connect(false)?;
+        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        Self::adopt_tx(
+            &tx,
+            project,
+            version,
+            source,
+            digest,
+            variant,
+            adoption_ref,
+            token,
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn adopt_tx(
+        tx: &Transaction,
+        project: &str,
+        version: &str,
+        source: &str,
+        digest: &str,
+        variant: &str,
+        adoption_ref: &str,
+        token: Option<&str>,
+    ) -> Result<()> {
         if version.is_empty()
             || source.is_empty()
             || digest.len() < 16
@@ -153,12 +179,10 @@ impl MapStore {
         {
             return Err(Error::Invalid("architecture"));
         }
-        let mut db = self.connect(false)?;
-        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(token) = token {
-            crate::identity::authorize(&tx, token, project, None, "manager")?;
+            crate::identity::authorize(tx, token, project, None, "manager")?;
         }
-        if !exists(&tx, "map_projects", project)? {
+        if !exists(tx, "map_projects", project)? {
             return Err(Error::Missing);
         }
         let previous: Option<String> = tx
@@ -181,9 +205,8 @@ impl MapStore {
         tx.execute("INSERT OR IGNORE INTO map_architecture_revisions(project_id,version,source_ref,digest,variant,adoption_ref,adopted_at) VALUES(?,?,?,?,?,?,unixepoch())",params![project,version,source,digest,variant,adoption_ref])?;
         tx.execute("INSERT INTO map_architectures(project_id,version,source_ref,digest,adopted_at) VALUES(?,?,?,?,unixepoch()) ON CONFLICT(project_id) DO UPDATE SET version=excluded.version,source_ref=excluded.source_ref,digest=excluded.digest,adopted_at=excluded.adopted_at",params![project,version,source,digest])?;
         if active.as_ref() != Some(&(version.to_string(), source.to_string(), digest.to_string())) {
-            event(&tx, project, None, "architecture", version)?;
+            event(tx, project, None, "architecture", version)?;
         }
-        tx.commit()?;
         Ok(())
     }
     #[allow(clippy::too_many_arguments)]
@@ -357,6 +380,13 @@ impl MapStore {
         self.node_bound(n, None)
     }
     pub fn node_bound(&self, n: &NodeInput, token: Option<&str>) -> Result<()> {
+        let mut db = self.connect(false)?;
+        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        Self::node_tx(&tx, n, token)?;
+        tx.commit()?;
+        Ok(())
+    }
+    pub(crate) fn node_tx(tx: &Transaction, n: &NodeInput, token: Option<&str>) -> Result<()> {
         if !matches!(
             n.kind.as_str(),
             "domain" | "module" | "submodule" | "function" | "work_package"
@@ -369,15 +399,13 @@ impl MapStore {
         {
             return Err(Error::Invalid("node fields"));
         }
-        let mut db = self.connect(false)?;
-        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(token) = token {
-            crate::identity::authorize(&tx, token, &n.project_id, Some(&n.id), "manager")?;
+            crate::identity::authorize(tx, token, &n.project_id, Some(&n.id), "manager")?;
         }
-        if !exists(&tx, "map_projects", &n.project_id)? {
+        if !exists(tx, "map_projects", &n.project_id)? {
             return Err(Error::Missing);
         }
-        if !exists_architecture(&tx, &n.project_id)? {
+        if !exists_architecture(tx, &n.project_id)? {
             return Err(Error::Conflict("project architecture missing"));
         }
         if let Some(p) = &n.parent_id {
@@ -435,9 +463,8 @@ impl MapStore {
         }
         let changed = tx.execute("INSERT INTO map_dev_nodes(id,project_id,parent_id,kind,title,goal,sort_key,plan_state,architecture_ref,owner,generation,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,unixepoch()) ON CONFLICT(id) DO UPDATE SET parent_id=excluded.parent_id,kind=excluded.kind,title=excluded.title,goal=excluded.goal,sort_key=excluded.sort_key,plan_state=excluded.plan_state,architecture_ref=excluded.architecture_ref,owner=excluded.owner,generation=excluded.generation,updated_at=excluded.updated_at WHERE map_dev_nodes.parent_id IS NOT excluded.parent_id OR map_dev_nodes.kind IS NOT excluded.kind OR map_dev_nodes.title IS NOT excluded.title OR map_dev_nodes.goal IS NOT excluded.goal OR map_dev_nodes.sort_key IS NOT excluded.sort_key OR map_dev_nodes.plan_state IS NOT excluded.plan_state OR map_dev_nodes.architecture_ref IS NOT excluded.architecture_ref OR map_dev_nodes.owner IS NOT excluded.owner OR map_dev_nodes.generation IS NOT excluded.generation", params![n.id,n.project_id,n.parent_id,n.kind,n.title,n.goal,n.sort_key,n.plan_state,n.architecture_ref,n.owner,n.generation])?;
         if changed > 0 {
-            event(&tx, &n.project_id, Some(&n.id), "node", "")?;
+            event(tx, &n.project_id, Some(&n.id), "node", "")?;
         }
-        tx.commit()?;
         Ok(())
     }
     pub fn dependency(&self, from: &str, to: &str) -> Result<()> {
@@ -480,6 +507,7 @@ impl MapStore {
         tx.commit()?;
         Ok(())
     }
+    /// Trusted database-owner API; worker callers use authenticated submissions.
     pub fn checkpoint(&self, c: &CheckpointInput) -> Result<bool> {
         let input = crate::submission::Submission {
             base_checkpoint_rowid: None,
@@ -540,11 +568,12 @@ impl MapStore {
         tx.commit()?;
         Ok(())
     }
+    /// Trusted database-owner API; worker artifacts travel in their scoped submission.
     pub fn artifact(&self, a: &ArtifactInput) -> Result<()> {
-        if a.verification == "verified" {
-            return Err(Error::Invalid("verified requires Git check"));
-        }
-        self.artifact_impl(a, None)
+        self.artifact_impl(a, None, false)
+    }
+    pub(crate) fn legacy_worker_artifact(&self, a: &ArtifactInput) -> Result<()> {
+        self.artifact_impl(a, None, true)
     }
     pub fn artifact_checked(&self, a: &ArtifactInput, repo_root: &Path) -> Result<()> {
         if !repo_root.is_dir() || !crate::git_index::oid(&a.revision) {
@@ -552,9 +581,17 @@ impl MapStore {
         }
         let mut verified = a.clone();
         verified.verification = "verified".into();
-        self.artifact_impl(&verified, Some(repo_root))
+        self.artifact_impl(&verified, Some(repo_root), false)
     }
-    fn artifact_impl(&self, a: &ArtifactInput, checked: Option<&Path>) -> Result<()> {
+    fn artifact_impl(
+        &self,
+        a: &ArtifactInput,
+        checked: Option<&Path>,
+        legacy_worker: bool,
+    ) -> Result<()> {
+        if checked.is_none() && a.verification == "verified" {
+            return Err(Error::Invalid("verified requires Git check"));
+        }
         if a.repo_key.is_empty()
             || a.revision.is_empty()
             || a.path.is_empty()
@@ -588,6 +625,11 @@ impl MapStore {
         let Some(project) = project else {
             return Err(Error::Missing);
         };
+        if legacy_worker {
+            require_current_schema(&tx)?;
+            let state = crate::takeover::global_worker_state(&tx, &project, &a.node_id)?;
+            crate::takeover::worker_write_gate(&state, true)?;
+        }
         if let Some(repo_root) = checked {
             let registered:String=tx.query_row("SELECT r.path FROM map_repositories r JOIN map_project_repositories p USING(repo_key) WHERE p.project_id=? AND r.repo_key=?",params![project,a.repo_key],|r|r.get(0)).optional()?.ok_or(Error::Invalid("repository registration"))?;
             if repo_root

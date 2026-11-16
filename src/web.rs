@@ -45,6 +45,13 @@ impl MapWeb {
         self.manager_token = None;
         self
     }
+    fn worker_submission(&self, h: &HeaderMap, input: &crate::submission::Submission) -> Response {
+        if self.scoped {
+            mutation(self.store.submit_bound(input, Some(bearer(h))))
+        } else {
+            mutation(self.store.submit_legacy_worker(input))
+        }
+    }
     fn scope(&self, h: &HeaderMap, project: Option<&str>, node: Option<&str>, role: &str) -> bool {
         if !self.scoped {
             return self.write_authorized(h, role == "manager");
@@ -609,7 +616,7 @@ async fn submit_checkpoint(
         artifacts: vec![],
         resources: None,
     };
-    mutation(w.store.submit_bound(&bundle, w.scoped.then(|| bearer(&h))))
+    w.worker_submission(&h, &bundle)
 }
 async fn submit_acceptance(
     State(w): State<MapWeb>,
@@ -638,7 +645,7 @@ async fn submit_artifact(
     if w.scoped || !w.write_authorized(&h, false) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    mutation(w.store.artifact(&input))
+    mutation(w.store.legacy_worker_artifact(&input))
 }
 async fn upsert_node(
     State(w): State<MapWeb>,
@@ -730,7 +737,7 @@ async fn submit_bundle(
     if !w.scope(&h, None, Some(&input.checkpoint.node_id), "worker") {
         return StatusCode::FORBIDDEN.into_response();
     }
-    mutation(w.store.submit_bound(&input, w.scoped.then(|| bearer(&h))))
+    w.worker_submission(&h, &input)
 }
 
 fn bearer(h: &HeaderMap) -> &str {

@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: i64 = 10;
+pub const SCHEMA_VERSION: i64 = 12;
 pub fn backup(store: &MapStore, destination: &Path) -> Result<()> {
     if destination.exists() {
         return Err(Error::Conflict("backup destination exists"));
@@ -52,6 +52,21 @@ fn table(db: &Connection, name: &str) -> Result<bool> {
         .optional()?
         .is_some())
 }
+fn install_legacy_worker_snapshot(tx: &rusqlite::Transaction, prior_version: i64) -> Result<()> {
+    tx.execute_batch(include_str!("legacy_workers.sql"))?;
+    // V11 mixed new and migrated assignments without recording their provenance.
+    if (1..=10).contains(&prior_version) {
+        tx.execute_batch(
+            "INSERT INTO map_rc2_nodes
+            SELECT id,owner,generation FROM map_dev_nodes WHERE owner IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM map_local_nodes WHERE node_id=map_dev_nodes.id);
+            INSERT INTO map_rc2_workers SELECT token_hash FROM map_identities
+            WHERE revoked=0 AND json_extract(binding,'$.role')='worker'
+            AND json_extract(binding,'$.expires_at')>unixepoch();",
+        )?;
+    }
+    Ok(())
+}
 pub fn migrate(store: &MapStore) -> Result<()> {
     let mut db = store.connect(false)?;
     let version = if table(&db, "map_schema_migrations")? {
@@ -89,6 +104,17 @@ pub fn migrate(store: &MapStore) -> Result<()> {
             |r| r.get(0),
         )?;
         if current == SCHEMA_VERSION {
+            return Ok(());
+        }
+        if matches!(current, 10 | 11) {
+            tx.execute_batch(include_str!("takeover.sql"))?;
+            install_legacy_worker_snapshot(&tx, current)?;
+            tx.execute(
+                "INSERT INTO map_schema_migrations VALUES(?,unixepoch())",
+                [SCHEMA_VERSION],
+            )?;
+            integrity(&tx)?;
+            tx.commit()?;
             return Ok(());
         }
         if current > SCHEMA_VERSION {
@@ -199,6 +225,8 @@ pub fn migrate(store: &MapStore) -> Result<()> {
             )?;
         }
     }
+    tx.execute_batch(include_str!("takeover.sql"))?;
+    install_legacy_worker_snapshot(&tx, version)?;
     navigation::rebuild(&tx)?;
     tx.execute(
         "INSERT INTO map_schema_migrations(version,applied_at) VALUES(?,unixepoch())",

@@ -226,8 +226,8 @@ fn different_project_nodes_can_reuse_submission_key() {
             },"artifacts":[]
         }))
         .unwrap();
-        assert!(store.submit_bound(&input, None).unwrap().created);
-        assert!(!store.submit_bound(&input, None).unwrap().created);
+        assert!(store.submit(&input).unwrap().created);
+        assert!(!store.submit(&input).unwrap().created);
     }
 }
 
