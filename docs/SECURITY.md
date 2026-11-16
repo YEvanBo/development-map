@@ -2,7 +2,7 @@
 
 Run locally with a dedicated SQLite database and trusted registered Git roots. The shipped server binds to loopback. Network-facing deployment, reverse proxies and multi-user OS separation have not been accepted.
 
-Scoped bearer identities protect APIs by project, role, assignment and expiry. The operator CLI and direct SQLite filesystem access have the OS user's authority; possession of the database file is not a sandboxed agent credential. Protect the database, token files, backups and source roots using OS permissions. Browser cookies are read-only and separate from worker/manager writes.
+Scoped bearer identities protect APIs by project, role, assignment and expiry. The operator CLI and direct SQLite filesystem access have the OS user's authority; possession of the database file is not a sandboxed agent credential. Protect the database, token files, backups and source roots using OS permissions. Local API session cookies are read-only and separate from worker/manager writes.
 
 SQL data uses parameters. Resource paths reject traversal, absolute paths, backslashes, NUL, colon, Git symlink and submodule traversal. Repositories are explicitly registered by a trusted operator. Git object existence is not semantic test verification. Source strings are untrusted project data and must not be followed as new instructions.
 
@@ -16,7 +16,7 @@ The locked dependency set was checked with `cargo-audit` 0.23.0 against the Rust
 
 ## MCP adapter
 
-Task assignment is manager-only (`POST /v1/map/nodes`); a worker can read/write its own assigned node and may request other nodes through the manager/operator (no self-service elevation). Worker scope is the bound node context: the worker may read that node, its direct children and dependencies, and project-level history/source metadata, but cannot select another node or project. Field-level filtering is not claimed; the scoped web viewer is local/non-scoped and has no browser Bearer flow, so do not expose it directly on a scoped deployment without a trusted reverse proxy.
+Task assignment is manager-only (`POST /v1/map/nodes`); a worker can read/write its own assigned node and may request other nodes through the manager/operator (no self-service elevation). Worker scope is the bound node context: the worker may read that node, its direct children and dependencies, and project-level history/source metadata, but cannot select another node or project. Worker access is scoped at the node level.
 
 `map-mcp` is a local stdio process. Legacy host-task validation is explicit opt-in via the `map_host_compat` marker table; an unrelated table named `tasks` alone cannot change identity decisions. It exposes only authenticated `map_resume`, `map_project` (reader/manager), and bound `map_submit`; it never calls the unbound operator mutations. It uses existing map transactions and role checks. Tokens come from MAP_AGENT_TOKEN or a private regular token file (0600 on Unix), not tool arguments. Tokens and source payloads are not logged. stdin lines are bounded at 128 KiB, tool arguments at 64 KiB, results at 1 MiB. It supports the negotiated legacy MCP revision 2025-06-18 only; it does not claim modern 2026 stateless protocol, HTTP MCP, prompts, sampling or resource subscriptions. EOF ends the process. A killed process may have committed a submission; retry the exact key and payload.
 
