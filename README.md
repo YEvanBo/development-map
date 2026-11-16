@@ -1,8 +1,14 @@
-# Development Map
+# Development Map · 开发地图
 
-Author: **EvanBo**
+换一个会话，Agent 也能从最近的检查点接着做。新会话可以查到上次交付了什么、证据在哪里，以及下一步要做什么。如果两个任务从同一个检查点开始，其中一个先提交，地图会拒绝另一个基于旧检查点的提交。在等待或退出前，Agent 按 Skill 保存交接说明和改动文件的私有快照；重启后就能找回未交付的工作，对照先提交的结果，合并后继续交付。
 
-A Rust/SQLite engineering context system for agents: adopted architecture, module dependencies, checkpoints, immutable source references, evidence bindings and explicit review facts. One agent can use it alone. Multiple agents may share facts when useful; roles are access scopes, not required separate agents.
+An agent can pick up where a previous session left off. The latest checkpoint shows what was delivered, where to find the evidence, and what to do next. If two tasks start from the same checkpoint, the first can submit and the second receives a conflict. Before waiting or exiting, the agent uses the Skill to save a private snapshot of its handoff notes and changed files. After restarting, it can recover its pending work, compare it with the first submission, and merge the two results.
+
+**接入 / Integrations** — Codex 和 DeepSeek Harness（DSH）均可通过随附的 MCP 服务与 Skill 使用开发地图。Both Codex and DeepSeek Harness (DSH) can use the bundled MCP server and Skill.
+
+**作者 / Author** — EvanBo
+
+The Rust/SQLite map also records adopted architecture, module dependencies, immutable source references and review evidence. One agent can use it alone, or several agents can share project context.
 
 This is a source release candidate. The prepared source uses Apache-2.0, permits commercial use under that license, and includes EvanBo attribution in NOTICE and companion components. Cargo publishing is disabled in this candidate.
 
