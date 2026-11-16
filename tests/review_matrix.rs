@@ -1,3 +1,5 @@
+#[path = "support/rc2.rs"]
+mod rc2;
 // DEVMap-V1-PREOPEN-20261115-A independent route/role matrix (review regression).
 // Not part of the original candidate. Added by the independent reviewer.
 use axum::{
@@ -119,7 +121,7 @@ fn setup() -> (tempfile::TempDir, MapStore) {
             "artifacts": []
         }))
         .unwrap();
-        s.submit_bound(&sub, None).unwrap();
+        s.submit(&sub).unwrap();
     }
     s.rebuild_projections().unwrap();
     (d, s)
@@ -741,6 +743,7 @@ async fn local_source_without_snapshot_is_404_and_history_uses_node_project() {
 async fn post_route_matrix_is_role_and_project_scoped() {
     let (_d, s) = setup();
     identities(&s);
+    rc2::migrate_fixture(&s);
     let expired = "matrix-expired-reader-0123456789";
     let revoked = "matrix-revoked-reader-0123456789";
     bind(&s, expired, "p", "reader", None, 1);
@@ -884,6 +887,7 @@ async fn post_route_matrix_is_role_and_project_scoped() {
 #[tokio::test]
 async fn non_scoped_mode_separates_read_and_write_tokens() {
     let (_d, s) = setup();
+    rc2::migrate_fixture(&s);
     let read = "non-scoped-read-bearer-0123456789";
     let worker = "non-scoped-worker-token-0123456789";
     let manager = "non-scoped-manager-token-0123456789";
@@ -950,6 +954,7 @@ fn protocol_document_matches_schema_version() {
 async fn closeout_artifact_scope() {
     let (d, s) = setup();
     identities(&s);
+    rc2::migrate_fixture(&s);
     assert!(std::process::Command::new("git")
         .args(["init", "-q"])
         .arg(d.path())
@@ -1081,6 +1086,7 @@ async fn migrated_v8_shared_artifact_is_quarantined() {
 async fn worker_cannot_supply_digest_for_verified_peer_artifact() {
     let (dir, store) = setup();
     identities(&store);
+    rc2::migrate_fixture(&store);
     let git = |args: &[&str]| {
         let out = std::process::Command::new("git")
             .arg("-C")
@@ -1209,7 +1215,7 @@ async fn v9_verified_claims_lose_authority_until_git_recheck() {
     s.register_project_repository("p", "r").unwrap();
     let db = s.connect(false).unwrap();
     db.execute("INSERT INTO map_artifacts(id,project_id,repo_key,revision,path,kind,verification,content_digest) VALUES(88,'p','r',?,'fact','file','verified','FORGED')",[&rev]).unwrap();
-    db.execute_batch("INSERT INTO map_node_artifacts VALUES('p-node',88,'observed');INSERT INTO map_checkpoint_artifacts VALUES(1,88,'observed'); UPDATE map_schema_migrations SET version=9 WHERE version=10;").unwrap();
+    db.execute_batch("INSERT INTO map_node_artifacts VALUES('p-node',88,'observed');INSERT INTO map_checkpoint_artifacts VALUES(1,88,'observed'); UPDATE map_schema_migrations SET version=9 WHERE version=(SELECT MAX(version) FROM map_schema_migrations);").unwrap();
     drop(db);
     assert!(s
         .read(|tx| development_map::store::artifacts(tx, "p-node", 0, 5, None))

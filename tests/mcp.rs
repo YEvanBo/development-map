@@ -1,3 +1,5 @@
+#[path = "support/rc2.rs"]
+mod rc2;
 use development_map::{
     identity::Binding,
     mcp::Session,
@@ -152,6 +154,7 @@ fn project_and_worker_scopes_are_preserved() {
 #[test]
 fn stdio_persists_and_retries_without_stdout_secrets() {
     let (d, s) = setup();
+    rc2::migrate_fixture(&s);
     let bundle = json!({"submission_key":"mcp-v1","checkpoint":{"node_id":"node","owner":"EvanBo","generation":1,"version":1,"digest":"1234567890123456","summary":"real MCP write","source_ref":"test"},"artifacts":[]});
     let mut c = Command::new(env!("CARGO_BIN_EXE_map-mcp"))
         .arg(d.path().join("map.sqlite"))
@@ -255,7 +258,16 @@ fn schema_mismatch_rejects_reads_and_writes_without_side_effects() {
     };
     let baseline = counts();
     let mut session = ready(&s, TOKEN);
-    for (version, reason) in [(9, "migration required"), (11, "upgrade map tools")] {
+    for (version, reason) in [
+        (
+            development_map::recovery::SCHEMA_VERSION - 1,
+            "migration required",
+        ),
+        (
+            development_map::recovery::SCHEMA_VERSION + 1,
+            "upgrade map tools",
+        ),
+    ] {
         db.execute("UPDATE map_schema_migrations SET version=?", [version])
             .unwrap();
         for request in [
@@ -277,6 +289,7 @@ fn schema_mismatch_rejects_reads_and_writes_without_side_effects() {
 fn concurrent_processes_recover_pending_file_after_stale_base_exit() {
     use std::io::{BufRead, BufReader};
     let (dir, store) = setup();
+    rc2::migrate_fixture(&store);
     let launch = || {
         let mut child = Command::new(env!("CARGO_BIN_EXE_map-mcp"))
             .arg(dir.path().join("map.sqlite"))
