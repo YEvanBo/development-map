@@ -12,6 +12,15 @@ The Rust/SQLite map also records adopted architecture, module dependencies, immu
 
 This is a source release candidate. The prepared source uses Apache-2.0, permits commercial use under that license, and includes EvanBo attribution in NOTICE and companion components. Cargo publishing is disabled in this candidate.
 
+下载 / Downloads: [v0.1.0-rc.4](https://github.com/YEvanBo/development-map/releases/tag/v0.1.0-rc.4)
+
+| 文件 / File | 用途 / Purpose |
+| --- | --- |
+| `development-map-v0.1.0-rc.4-windows-x64.zip` | Windows Intel/AMD 64 位可运行包，包含 MCP、CLI、Skill 和 Agent 部署说明；无需 Rust。 / Ready-to-run Windows bundle. |
+| `development-map-v0.1.0-rc.4-source.zip` | 完整源码，供自行编译或审查。 / Complete source for building and review. |
+
+把 Windows 包解压后交给 Agent，先阅读 `DEPLOY.md`，再检查环境、关联正确项目并配置 MCP。没有传统安装器；已有地图和凭据需保留。源码仓库中的 [Windows 部署说明](packaging/windows-x64/DEPLOY.md) 与包内一致。
+
 ## Build and test
 
 Rust/Cargo (1.89 or newer for the locked dependencies), a C toolchain (bundled SQLite build), and Git are required. The tested host was macOS arm64, rustc 1.98.0. Cargo.lock is retained. No scheduler, communications bridge, commercial harness, model API, Python backend, database server, or GPU is required.
