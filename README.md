@@ -14,12 +14,39 @@ This is a source release candidate. The prepared source uses Apache-2.0, permits
 
 下载 / Downloads: [v0.1.0-rc.4](https://github.com/YEvanBo/development-map/releases/tag/v0.1.0-rc.4)
 
-| 文件 / File | 用途 / Purpose |
-| --- | --- |
-| `development-map-v0.1.0-rc.4-windows-x64.zip` | Windows Intel/AMD 64 位可运行包，包含 MCP、CLI、Skill 和 Agent 部署说明；无需 Rust。 / Ready-to-run Windows bundle. |
-| `development-map-v0.1.0-rc.4-source.zip` | 完整源码，供自行编译或审查。 / Complete source for building and review. |
+## Choose the OS and CPU
 
-把 Windows 包解压后交给 Agent，先阅读 `DEPLOY.md`，再检查环境、关联正确项目并配置 MCP。没有传统安装器；已有地图和凭据需保留。源码仓库中的 [Windows 部署说明](packaging/windows-x64/DEPLOY.md) 与包内一致。
+先识别安装目标的系统与 CPU，再选下面对应的包。WSL 选 Linux 包；Apple Silicon 选 macos-arm64；Intel/AMD 64 位 Linux 选 linux-x64。不要根据当前聊天客户端所在系统替远端机器选包。
+
+| Operating system | CPU | Download |
+| --- | --- | --- |
+| Windows | x64 / AMD64 | [development-map-v0.1.0-rc.4-windows-x64.zip](https://github.com/YEvanBo/development-map/releases/download/v0.1.0-rc.4/development-map-v0.1.0-rc.4-windows-x64.zip) |
+| macOS (Apple Silicon) | arm64 | [development-map-v0.1.0-rc.4-macos-arm64.tar.gz](https://github.com/YEvanBo/development-map/releases/download/v0.1.0-rc.4/development-map-v0.1.0-rc.4-macos-arm64.tar.gz) |
+| Linux | aarch64 / arm64 | [development-map-v0.1.0-rc.4-linux-arm64.tar.gz](https://github.com/YEvanBo/development-map/releases/download/v0.1.0-rc.4/development-map-v0.1.0-rc.4-linux-arm64.tar.gz) |
+| Linux | x86_64 / amd64 | [development-map-v0.1.0-rc.4-linux-x64.tar.gz](https://github.com/YEvanBo/development-map/releases/download/v0.1.0-rc.4/development-map-v0.1.0-rc.4-linux-x64.tar.gz) |
+
+[Complete source](https://github.com/YEvanBo/development-map/releases/download/v0.1.0-rc.4/development-map-v0.1.0-rc.4-source.zip). Each bundle includes CLI, MCP, Skill, configuration examples, full source and `DEPLOY.md`. No Rust toolchain is needed to run it.
+
+On Linux/macOS, run `uname -s` and `uname -m`. On Windows PowerShell, inspect `[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture`. WSL uses a Linux package. Intel Mac, Windows ARM64 and 32-bit CPUs do not have prebuilt packages here; build from source instead of selecting a different architecture. Linux requires glibc 2.36+ (`getconf GNU_LIBC_VERSION`) and libgcc_s; these are not Alpine/musl or Android packages. macOS targets 11+ but was tested only on the current Apple Silicon host; it is not Apple Developer ID notarized.
+
+## Agent installation
+
+让 Agent 先读包内 `DEPLOY.md`：核验签名后解压到新目录，保留已有数据库、凭据和宿主配置；按示例合入 MCP 和 Skill，执行隔离 smoke 检查，再验证实际宿主连接。完成安装验收就交付，不自动展开其他任务。
+
+1. Identify the target OS, CPU, version directory and explicitly selected project. Download the matching archive plus `.sha256` and `.sig` from the same release. Verify hashes and SSHSIG against a public-key fingerprint obtained through a trusted release channel.
+2. Extract into a new directory: `tar -xzf <archive>` on Linux/macOS; `Expand-Archive -LiteralPath <archive> -DestinationPath <new-directory>` on Windows. Read `DEPLOY.md` before configuring anything. Preserve existing maps, credentials and settings.
+3. Run `bin/map-mcp --version` (Windows: `bin/map-mcp.exe --version`). Git is needed for repository verification; Python 3 is needed for pending snapshots and smoke checks. No database server, Rust or Node runtime is required for the core binaries.
+4. Merge `Skill` into the selected project at `.agents/skills/development-map`, preserving existing contents. Merge the supplied `config/` example into the installed Codex or DSH host configuration. Use absolute executable, database and token-file paths. Never print credentials or embed tokens in configuration; Unix token files require mode 0600.
+5. Reuse the authorized project/task binding. If none exists, ask whether to associate an existing task or create one. Paths alone do not authorize a binding. Only a trusted operator records an actual user goal confirmation; installation itself does not create business tasks or confirmations.
+6. Run `python3 smoke.py --work <new-nonexistent-absolute-directory>` with the installed Python command. Then verify the actual host MCP tools/list, authorized resume, EOF shutdown and restart persistence. Installing a Skill alone does not guarantee automatic invocation. Deliver after installation checks; do not expand unrelated project work.
+
+Keep databases, backups and tokens outside the program directory. Roll back by pointing configuration at the previous version; never overwrite user data. See the bundle DEPLOY.md and [host integration guide](docs/PLATFORMS.md) for details.
+
+## Linux x64 validation
+
+2026-11-17: the public Linux x64 archive passed all 37 bundle assertions on an Intel/AMD x86_64 Windows laptop running Ubuntu 24.04 under WSL2 (glibc 2.39), with no QEMU runner. Archive SHA-256, internal manifest and SSHSIG were verified. This covers MCP lifecycle, goal correction, restart persistence, task-scoped revocation, exact replay, pending snapshots and backup/restore. This is native x64 instruction execution under WSL2, not bare-metal Linux or a model-backed Codex/DSH session. Bare-metal Linux remains unverified.
+
+Linux x64 已在真实 x64 笔记本的 WSL2 Ubuntu 中直接运行，37 项包级检查通过，没有使用 QEMU。裸机 Linux、该平台的 Codex/DSH 模型会话尚未实测。
 
 ## Build and test
 
