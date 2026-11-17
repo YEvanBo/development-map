@@ -30,7 +30,8 @@ try:
             if path.is_absolute() or ".." in path.parts or path.resolve() != root / path or not path.is_file():
                 parser.error(f"expected a regular worktree file: {path}")
             archive.write(path, "files/" + path.as_posix())
-    with staged.open("rb") as saved:
+    # Windows FlushFileBuffers requires a writable handle.
+    with staged.open("r+b") as saved:
         os.fsync(saved.fileno())
     final = staged.with_suffix(".zip")
     os.link(staged, final)

@@ -1,0 +1,6 @@
+# EvanBo / Apache-2.0. Merge into the selected trusted config; replace all paths.
+[mcp_servers.evanbo_development_map]
+command = "C:/Users/YOU/AppData/Local/DevelopmentMap/v0.1.0-rc.4/bin/map-mcp.exe"
+args = ["C:/Users/YOU/AppData/Local/DevelopmentMap-data/map.sqlite", "--token-file", "C:/Users/YOU/AppData/Local/DevelopmentMap-data/worker-token.txt"]
+startup_timeout_sec = 20
+tool_timeout_sec = 30

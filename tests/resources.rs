@@ -15,6 +15,23 @@ fn git(root: &Path, args: &[&str]) -> String {
     assert!(o.status.success(), "{:?}", o);
     String::from_utf8(o.stdout).unwrap().trim().into()
 }
+// Resource verification reads Git objects. Build mode-120000 fixtures directly
+// so Windows exercises the same rejection without OS symlink privileges.
+fn index_symlink(root: &Path, path: &str, target: &str) {
+    let fixture = root.join("symlink-target.fixture");
+    std::fs::write(&fixture, target).unwrap();
+    let blob = git(root, &["hash-object", "-w", "symlink-target.fixture"]);
+    std::fs::remove_file(fixture).unwrap();
+    git(
+        root,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("120000,{blob},{path}"),
+        ],
+    );
+}
 fn node(s: &MapStore, id: &str, parent: Option<&str>) {
     s.node(&NodeInput {
         id: id.into(),
@@ -265,7 +282,9 @@ fn traversal_symlink_cross_project_and_wrong_checkpoint() {
         b.resources.as_mut().unwrap().entries[1].path = Some(p.into());
         assert!(s.submit(&b).is_err(), "{p}");
     }
-    std::os::unix::fs::symlink("/etc", d.path().join("escape")).unwrap();
+    index_symlink(d.path(), "escape", "/etc");
+    git(d.path(), &["commit", "-qm", "directory link fixture"]);
+    b = bundle(&git(d.path(), &["rev-parse", "HEAD"]));
     b.resources.as_mut().unwrap().entries[1].path = Some("escape/passwd".into());
     assert!(s.submit(&b).is_err());
     b = bundle(&rev);
@@ -342,11 +361,9 @@ fn database_claims_and_git_symlink_cannot_fake_verification() {
     assert!(s
         .accept("m", 1, 1, &b.checkpoint.digest, "accepted", "host", "test")
         .is_err());
-    std::os::unix::fs::symlink("/etc/passwd", d.path().join("src/link")).unwrap();
-    git(d.path(), &["add", "src/link"]);
+    index_symlink(d.path(), "src/link", "/etc/passwd");
     git(d.path(), &["commit", "-qm", "link fixture"]);
     let next = git(d.path(), &["rev-parse", "HEAD"]);
-    std::fs::remove_file(d.path().join("src/link")).unwrap();
     b = bundle(&next);
     b.checkpoint.version = 2;
     b.submission_key = "symlink".into();
