@@ -1,0 +1,9 @@
+# EvanBo / Apache-2.0. Existing DSH headless profile overlay; replace all paths.
+- insert:
+    - id: evanbo-development-map
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: evanbo_development_map
+        transport: stdio
+        command: C:/Users/YOU/AppData/Local/DevelopmentMap/v0.1.0-rc.4/bin/map-mcp.exe
+        args: [C:/Users/YOU/AppData/Local/DevelopmentMap-data/map.sqlite, --token-file, C:/Users/YOU/AppData/Local/DevelopmentMap-data/worker-token.txt]
