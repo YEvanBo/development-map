@@ -1,0 +1,17 @@
+{
+  "LICENSE": [
+    "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  ],
+  "NOTICE": [
+    "410520ed1f1df3982828e78ec8484157fd75edd994a39dd01ffdf15c06849b66"
+  ],
+  "SKILL.md": [
+    "ecf5ddc7ac570ca481b63539364b336f3c9458e68f1e6830a81e53a2267549ea"
+  ],
+  "references/cli.md": [
+    "43fbf51e9f180e2051bf83fa884ba7c71a48c36ab52c122bfaf0f2446164b0b4"
+  ],
+  "scripts/save-pending.py": [
+    "1c8c519f85c9182d11f283c3631d42710cfbdbf44b2d7821236768ee434c8ec5"
+  ]
+}

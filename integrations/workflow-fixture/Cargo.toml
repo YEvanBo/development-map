@@ -1,0 +1,9 @@
+[package]
+name = "devmap-workflow-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[dependencies]
+development-map = { path = "../.." }
+serde_json = "1"
+tempfile = "3"

@@ -457,7 +457,10 @@ fn migration_from_v10_preserves_existing_data_and_claims() {
         std::fs::read_dir(dir.path())
             .unwrap()
             .filter_map(Result::ok)
-            .filter(|e| e.file_name().to_string_lossy().contains("before-map-v12"))
+            .filter(|e| e.file_name().to_string_lossy().contains(&format!(
+                "before-map-v{}",
+                development_map::recovery::SCHEMA_VERSION
+            )))
             .count(),
         1
     );

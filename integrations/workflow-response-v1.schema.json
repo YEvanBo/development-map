@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:devmap:workflow:response:1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "action",
+    "status",
+    "project_id",
+    "node_id",
+    "goal_revision",
+    "checkpoint",
+    "version",
+    "generation",
+    "capabilities",
+    "capabilities_source",
+    "required_user_action",
+    "reason",
+    "error",
+    "receipt",
+    "idempotency",
+    "context"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "devmap-workflow/1"
+    },
+    "action": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "node_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "goal_revision": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "checkpoint": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "version": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "generation": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "capabilities": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "capabilities_source": {
+      "type": "string"
+    },
+    "required_user_action": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "receipt": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "idempotency": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "context": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

@@ -21,3 +21,8 @@ pub mod mcp;
 
 pub mod reference;
 pub mod takeover;
+
+pub mod diagnostics;
+
+/// Agent-reported scope reminders, not execution permissions.
+pub mod scope;

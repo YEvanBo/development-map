@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: i64 = 12;
+pub const SCHEMA_VERSION: i64 = 14;
 pub fn backup(store: &MapStore, destination: &Path) -> Result<()> {
     if destination.exists() {
         return Err(Error::Conflict("backup destination exists"));
@@ -106,7 +106,7 @@ pub fn migrate(store: &MapStore) -> Result<()> {
         if current == SCHEMA_VERSION {
             return Ok(());
         }
-        if matches!(current, 10 | 11) {
+        if matches!(current, 10..=13) {
             tx.execute_batch(include_str!("takeover.sql"))?;
             install_legacy_worker_snapshot(&tx, current)?;
             tx.execute(

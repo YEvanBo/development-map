@@ -27,8 +27,24 @@ fn operator_request<T: serde::de::DeserializeOwned>() -> Result<T, String> {
 }
 fn run() -> Result<serde_json::Value, String> {
     let a = env::args().collect::<Vec<_>>();
+    if a.get(1).map(String::as_str) == Some("status") {
+        if a.len() == 2 {
+            return Ok(development_map::diagnostics::program());
+        }
+        if !(a.len() == 4 || a.len() == 5) {
+            return Err("usage: mapctl status [<db> <project_id> [node_id]]".into());
+        }
+        let token = env::var("MAP_AGENT_TOKEN").map_err(|_| "MAP_AGENT_TOKEN required")?;
+        let request = development_map::agent::Resume {
+            project_id: a[3].clone(),
+            node_id: a.get(4).cloned(),
+            ..Default::default()
+        };
+        return development_map::diagnostics::snapshot(&MapStore::new(&a[2]), &token, &request)
+            .map_err(|e| development_map::agent::client_error(&e).to_string());
+    }
     if a.len() < 3 {
-        return Err("usage: mapctl <project|architecture-node|architecture-edge|dependency|trace|grant-reference|revoke-reference|repair-host|lookup-host|intake|assess-risk|record-risk|record-reminder|revoke-goal|confirm-goal|migrate|rebuild|backup|restore|import-speaker|import-harness|adopt|node|handoff|bind|revoke|register-repo|link-repo|submit-resources|resources|scan-git> <db> [arguments]".into());
+        return Err("usage: mapctl <project|architecture-node|architecture-edge|dependency|trace|grant-reference|revoke-reference|repair-host|lookup-host|intake|assess-risk|record-risk|record-reminder|revoke-goal|confirm-goal|scope-check|scope-report|migrate|rebuild|backup|restore|import-speaker|import-harness|adopt|node|handoff|bind|revoke|register-repo|link-repo|submit-resources|resources|scan-git> <db> [arguments]".into());
     }
     let s = MapStore::new(&a[2]);
     let arg = |i| {
@@ -157,6 +173,22 @@ fn run() -> Result<serde_json::Value, String> {
                 .intake(&request)
                 .map(|id| json!({"confirmation_event":id}))
                 .map_err(|e| format!("{e:?}"));
+        }
+        "scope-check" => {
+            return s
+                .scope_check(
+                    &env::var("MAP_AGENT_TOKEN").map_err(|_| "MAP_AGENT_TOKEN required")?,
+                    &operator_request()?,
+                )
+                .map_err(|e| format!("{e:?}"))
+        }
+        "scope-report" => {
+            return s
+                .scope_report(
+                    &env::var("MAP_AGENT_TOKEN").map_err(|_| "MAP_AGENT_TOKEN required")?,
+                    &operator_request()?,
+                )
+                .map_err(|e| format!("{e:?}"))
         }
         "revoke-goal" => s.revoke_goal(&operator_request()?),
         "confirm-goal" => {

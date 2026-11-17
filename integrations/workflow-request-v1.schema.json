@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:devmap:workflow:request:1",
+  "type": "object",
+  "required": [
+    "action",
+    "arguments"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": [
+        "intake",
+        "resume",
+        "inspect",
+        "submit",
+        "accept",
+        "revoke",
+        "reopen",
+        "verify",
+        "correction.propose",
+        "correction.apply",
+        "correction.history"
+      ]
+    },
+    "arguments": {
+      "type": "object",
+      "description": "Native Core args; only resume/inspect and submit dispatch. Unknown preconditions BLOCKED."
+    }
+  }
+}

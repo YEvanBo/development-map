@@ -40,8 +40,12 @@ The [official Skill guide](https://antigravity.google/docs/skills?app=antigravit
 
 ## Acceptance and fallback
 
-Check tools/list exposes exactly map_resume, map_project and map_submit; initialization identifies `evanbo-development-map`. A reader can read its project and must fail on another project; a worker resumes only its assignment. Submit an isolated real checkpoint, retry exact input, restart the MCP process and resume the same version. Do not run these acceptance writes against a production map without its normal authorization.
+Check tools/list exposes the five V1.1 tools map_resume, map_project, map_submit, map_scope_check and map_scope_report; initialization identifies `evanbo-development-map`. A reader can read its project and must fail on another project; a worker resumes only its assignment. Submit an isolated real checkpoint, retry exact input, restart the MCP process and resume the same version. Do not run these acceptance writes against a production map without its normal authorization.
 
 DSH headless (DeepSeek API) and Codex CLI each passed two model-backed sessions using the project Skill and stdio MCP. A read-only recovery left tracked files and checkpoints unchanged. A requested fix changed only the required helper, passed the existing test, and advanced only the bound node from v1 to v2. Both left the unrelated historical telemetry task untouched. Antigravity was outside this verification.
 
 Protocol support is explicitly legacy MCP 2025-06-18 over stdio with initialize/initialized negotiation. Clients must allow that revision/fallback. Newer stateless 2026 protocol, HTTP MCP, prompts and resources are not advertised. No model API key is needed by the map itself.
+
+## Connection diagnostics (after RC4)
+
+Use `map_resume` with `diagnostic:true` on the actual configured connection. `request_received` proves only that this initialized stdio session handled the request; host identity, host health and live task execution remain unknown. `mapctl status` cannot certify a host connection. See [CLI diagnostics](CLI.md#read-only-status-diagnostics-working-source-after-rc4).

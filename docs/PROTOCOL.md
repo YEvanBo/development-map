@@ -1,6 +1,6 @@
 # Local protocol — EvanBo Development Map
 
-The authoritative Rust inputs are in `store.rs`, `submission.rs`, `identity.rs`, `agent.rs`, `resources.rs`, `handoff.rs`. SQLite schema and upgrade SQL are retained under `src/`; current map schema version is 12.
+The authoritative Rust inputs are in `store.rs`, `submission.rs`, `identity.rs`, `agent.rs`, `resources.rs`, `handoff.rs`. SQLite schema and upgrade SQL are retained under `src/`; current map schema version is 14 (VNext candidate; frozen V12 assets are unchanged).
 
 ## Trusted operator
 
@@ -107,3 +107,10 @@ The operator can withdraw one node goal with `mapctl revoke-goal DB` and JSON fi
 For reminder receipts, pass the observed confirmation_event as goal_revision (zero before first confirmation). Stale receipts are rejected. Goal changes or withdrawal begin a new reminder cycle.
 
 The opt-in global HTTP worker can write only on an active migrated RC assignment with its original owner and generation and no host route, past detachment or confirmation. Node credentials using the RC exception must also predate migration. Acceptance stops new writes; the exact prior submission can still return its original receipt. An explicit new goal reopens a completed node for scoped workers. Moving a route preserves this protection on the former node. Enrolled nodes require a node-scoped worker credential for new submissions.
+
+## VNext Agent scope reminder
+
+Schema 14 uses existing map_events for agent_scope_decision records. No new table,
+nonce, token or native identity proof. Old V13 approval tables, if present, remain
+historical data without a runtime endpoint. See [DIALOGUE-APPROVAL.md](DIALOGUE-APPROVAL.md).
+V12 signed source and release assets are unchanged.

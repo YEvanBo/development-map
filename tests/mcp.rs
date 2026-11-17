@@ -109,7 +109,7 @@ fn lifecycle_negotiation_and_no_execution_tools() {
             json!({"jsonrpc":"2.0","id":3,"method":"tools/list"}),
         )
         .unwrap();
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 3);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 5);
     assert_eq!(
         x.handle(&s, TOKEN, init()).unwrap()["error"]["code"],
         -32600
@@ -444,4 +444,145 @@ fn concurrent_processes_recover_pending_file_after_stale_base_exit() {
             Ok(())
         })
         .unwrap();
+}
+
+#[test]
+fn diagnostic_distinguishes_connection_and_saved_progress_without_writes() {
+    let (d, s) = setup();
+    let before = std::fs::read(d.path().join("map.sqlite")).unwrap();
+    let mut session = ready(&s, TOKEN);
+    let reply = session
+        .handle(
+            &s,
+            TOKEN,
+            call("map_resume", json!({"project_id":"p","diagnostic":true})),
+        )
+        .unwrap();
+    assert_eq!(reply["result"]["isError"], false);
+    let v: Value =
+        serde_json::from_str(reply["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(v["program"]["status"], "available");
+    assert_eq!(v["connection"]["status"], "request_received");
+    assert_eq!(v["connection"]["host_identity"], "unknown");
+    assert_eq!(v["task"]["execution_status"], "unknown");
+    assert_eq!(v["task"]["takeover_action"], "confirm_goal");
+    let output = Command::new(env!("CARGO_BIN_EXE_mapctl"))
+        .args(["status", d.path().join("map.sqlite").to_str().unwrap(), "p"])
+        .env("MAP_AGENT_TOKEN", TOKEN)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let cli: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(cli["connection"]["status"], "unknown");
+    assert_eq!(cli["task"], v["task"]);
+    assert_eq!(std::fs::read(d.path().join("map.sqlite")).unwrap(), before);
+    let denied = session
+        .handle(
+            &s,
+            TOKEN,
+            call(
+                "map_resume",
+                json!({"project_id":"other","diagnostic":true}),
+            ),
+        )
+        .unwrap();
+    assert_eq!(denied["result"]["isError"], true);
+    s.revoke_identity(TOKEN).unwrap();
+    assert_eq!(
+        session
+            .handle(
+                &s,
+                TOKEN,
+                call("map_resume", json!({"project_id":"p","diagnostic":true}))
+            )
+            .unwrap()["result"]["isError"],
+        true
+    );
+}
+
+#[test]
+fn diagnostic_program_only_and_missing_database_do_not_create_data() {
+    let out = Command::new(env!("CARGO_BIN_EXE_mapctl"))
+        .arg("status")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["database"]["status"], "unknown");
+    assert_eq!(v["task"]["execution_status"], "unknown");
+    let d = tempfile::tempdir().unwrap();
+    let path = d.path().join("absent.sqlite");
+    let out = Command::new(env!("CARGO_BIN_EXE_mapctl"))
+        .args(["status", path.to_str().unwrap(), "p"])
+        .env("MAP_AGENT_TOKEN", TOKEN)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(!path.exists());
+}
+
+#[test]
+fn diagnostic_real_stdio_restart_and_old_schema_are_read_only() {
+    let (d, s) = setup();
+    s.confirm_goal(&development_map::takeover::GoalConfirmation {
+        project_id: "p".into(),
+        node_id: "node".into(),
+        generation: 1,
+        previous: 0,
+        goal: "report.json with LF".into(),
+        user_ref: "synthetic-test-user".into(),
+    })
+    .unwrap();
+    let path = d.path().join("map.sqlite");
+    let before = std::fs::read(&path).unwrap();
+    for _ in 0..2 {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_map-mcp"))
+            .arg(&path)
+            .env("MAP_AGENT_TOKEN", TOKEN)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut input = c.stdin.take().unwrap();
+        for q in [
+            init(),
+            json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+            call("map_resume", json!({"project_id":"p","diagnostic":true})),
+        ] {
+            writeln!(input, "{q}").unwrap();
+        }
+        drop(input);
+        let out = c.wait_with_output().unwrap();
+        assert!(out.status.success());
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(!text.contains(TOKEN));
+        let lines: Vec<Value> = text
+            .lines()
+            .map(|s| serde_json::from_str(s).unwrap())
+            .collect();
+        let v: Value =
+            serde_json::from_str(lines[1]["result"]["content"][0]["text"].as_str().unwrap())
+                .unwrap();
+        assert_eq!(v["task"]["takeover_action"], "continue");
+        assert_eq!(v["task"]["execution_status"], "unknown");
+        assert!(v["task"]["checkpoint"]["version"].as_i64().unwrap() > 0);
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    s.connect(false)
+        .unwrap()
+        .execute(
+            "UPDATE map_schema_migrations SET version=11 WHERE version=(SELECT max(version) FROM map_schema_migrations)",
+            [],
+        )
+        .unwrap();
+    let old = std::fs::read(&path).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_mapctl"))
+        .args(["status", path.to_str().unwrap(), "p"])
+        .env("MAP_AGENT_TOKEN", TOKEN)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8(out.stderr).unwrap().contains("CONFLICT"));
+    assert_eq!(std::fs::read(&path).unwrap(), old);
 }

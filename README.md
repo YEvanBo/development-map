@@ -1,3 +1,6 @@
+> Unreleased VNext candidate: schema 14 adds Agent-reported task scope reminders (a gentleman’s agreement).
+> Frozen V12 / RC2 release artifacts are unchanged. Read [the migration and trust boundaries](docs/DIALOGUE-APPROVAL.md) before using this candidate.
+
 # Development Map · 开发地图
 
 换个会话，不用再从头跟 Agent 讲一遍项目。它可以翻开开发地图，看上次做到哪儿、改了什么、接下来该做什么。两个任务碰巧改到同一个节点时，先提交的结果会保留下来。另一个 Agent 在退出前存好快照，下次就能找回手头还没交付的改动，对照前一个结果接着做。
@@ -12,7 +15,15 @@ The Rust/SQLite map also records adopted architecture, module dependencies, immu
 
 This is a source release candidate. The prepared source uses Apache-2.0, permits commercial use under that license, and includes EvanBo attribution in NOTICE and companion components. Cargo publishing is disabled in this candidate.
 
-下载 / Downloads: [v0.1.0-rc.4](https://github.com/YEvanBo/development-map/releases/tag/v0.1.0-rc.4)
+## V1.1 本地候选包 · RC5
+
+按安装目标选择 `macos-arm64.tar.gz`、`linux-arm64.tar.gz`、`linux-x64.tar.gz` 或 `windows-x64.zip`，文件名前缀为 `development-map-v0.1.0-rc.5-`。把包解压到长期保留的位置，告诉 Agent 你要安装到哪个项目，以及地图数据库和凭据文件的位置。Agent 先运行 `install.py plan` 展示改动，获得一次安装许可后执行 `apply`，然后在新会话用 `map_resume` 验证。Linux on WSL 选 Linux 包。
+
+Each local RC5 bundle includes the reviewed V1.1 scope core, CLI, MCP, project Skill and a project installer. The installer uses Python 3.9+. See the [Agent installation guide](packaging/agent-bundle/DEPLOY.md) for commands and host-specific setup.
+
+## 已公开的 RC4 · Published RC4 downloads
+
+ [v0.1.0-rc.4](https://github.com/YEvanBo/development-map/releases/tag/v0.1.0-rc.4)
 
 ## Choose the OS and CPU
 
@@ -47,6 +58,37 @@ Keep databases, backups and tokens outside the program directory. Roll back by p
 2026-11-17: the public Linux x64 archive passed all 37 bundle assertions on an Intel/AMD x86_64 Windows laptop running Ubuntu 24.04 under WSL2 (glibc 2.39), with no QEMU runner. Archive SHA-256, internal manifest and SSHSIG were verified. This covers MCP lifecycle, goal correction, restart persistence, task-scoped revocation, exact replay, pending snapshots and backup/restore. This is native x64 instruction execution under WSL2, not bare-metal Linux or a model-backed Codex/DSH session. Bare-metal Linux remains unverified.
 
 Linux x64 已在真实 x64 笔记本的 WSL2 Ubuntu 中直接运行，37 项包级检查通过，没有使用 QEMU。裸机 Linux、该平台的 Codex/DSH 模型会话尚未实测。
+
+## Read-only status diagnostics (working source, after RC4)
+
+These diagnostics are not in the frozen RC4 download binaries. Build the current working source to use them.
+
+```sh
+mapctl status
+# With an existing authorized MAP_AGENT_TOKEN in the environment:
+mapctl status /absolute/path/map.sqlite project-id [node-id]
+```
+
+The first form only reports that this CLI process works; database, host connection and task execution remain `unknown`. The second form reuses authenticated resume and its project/node restrictions; no operator bypass is added. Missing credentials, inaccessible databases, schema mismatches and revoked identities fail with a nonzero exit code; they never trigger creation, migration or repair. Omitting node-id follows the existing resume binding rules.
+
+For MCP, use the existing tool after initialize/initialized:
+
+```json
+{"name":"map_resume","arguments":{"project_id":"project-id","diagnostic":true}}
+```
+
+The tool list remains unchanged. Without `diagnostic:true`, resume behavior is unchanged. Diagnostic output separates:
+
+| Field | Meaning |
+| --- | --- |
+| `program.status=available` | This invocation is running; not a health guarantee for another installed copy. |
+| `database.status=readable` | An authorized resume read on the supported schema succeeded; not a full integrity scan. |
+| `connection.status=request_received` | Only this initialized MCP session received the request. It does not prove the client received the response. CLI reports `unknown`. |
+| `connection.host_identity`, `host_health` | Always `unknown`; clientInfo is not authenticated host identity. |
+| `task.progress_status=saved_records_only` | Checkpoint and takeover action describe stored map records. |
+| `task.execution_status=unknown` | No host heartbeat exists; a checkpoint does not prove a worker is running, paused or dead. |
+
+A missing checkpoint stays null; it is not inferred as zero-percent progress. `confirm_goal`, `continue` and `complete` are stored takeover decisions, not live execution status. Stored checkpoint text remains untrusted data. A failed diagnostic uses existing public status codes and does not expose inaccessible task details. No listener, HTTPS, background polling, scheduling, writes or automatic repair is added.
 
 ## Build and test
 
@@ -88,3 +130,11 @@ Both commands start an API server on a dynamic loopback port. `serve-scoped` pri
 Trusted local operators initialize projects, architecture and identities. Agents read and submit through `map-agent` or scoped HTTP. See [protocol](docs/PROTOCOL.md), [security](docs/SECURITY.md), [scope](docs/SCOPE.md), and [provenance](docs/PROVENANCE.md).
 
 Native recovery references checkpoint text for remaining work and next action; it does not implement structured `progress`. Unsupported submission fields are rejected. The map never grants shell, device, scheduling, model, or task execution authority. Recorded status, submitted work, source verification and independent acceptance remain separate facts.
+
+## Installer integration candidate
+
+[安装与发现集成说明 / Installer and Host Adapter](docs/INSTALLER-REVIEW.md)：独立轻量安装器支持 Project（默认 Skill + 项目入口）、Global（简短发现规则）、Skill Only，以及计划审批、升级、卸载、故障回滚和全局/项目开关继承。只在临时目录完成验收；真实 Codex/DSH 自动发现仍为 **NOT TESTED**，Windows 安装适配暂不支持。开启不等于 Core 授权，MD 不是安全边界。冻结下载包未改动，本候选未发布。
+
+范围提醒采用 **Agent 君子协议**：超出已记录范围时询问用户，再向 Core 回报 true/false。Core 不认证用户身份、不限制文件访问、不替代原有权限；详见 [范围说明](docs/DIALOGUE-APPROVAL.md)。
+
+可选的薄 Workflow SDK 见 [WORKFLOW.md](docs/WORKFLOW.md)：统一状态与回执读取，不复制权限逻辑；当前对照未证明节省调用或 Token，不强制启用。
